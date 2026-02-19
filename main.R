@@ -35,18 +35,10 @@ suppressPackageStartupMessages(library(tidyverse))
 #' @examples 
 #' `data <- load_expression('/project/bf528/project_1/data/example_intensity_data.csv')`
 load_expression <- function(filepath) {
-  library(dplyr)
-  library(tibble)
-  
   data <- read.csv(filepath, check.names = FALSE)
-  
-  expr_tbl <- data %>%
-    as_tibble()
-  
-  # Rename first column to probe (NOT subject_id)
-  colnames(expr_tbl)[1] <- "probe"
-  
-  return(expr_tbl)
+  result_tib <- tibble::as_tibble(data)
+  colnames(result_tib)[1] <- "probe"
+  return(result_tib)
 }
 
 
@@ -64,16 +56,16 @@ load_expression <- function(filepath) {
 #' `$ probe: chr [1:40158] "1007_s_at" "1053_at" "117_at" "121_at" ...`
 filter_15 <- function(tibble){
   
+  
   threshold <- log2(15)
   
-  expr_mat <- result_tib %>%
+  expr_df <- result_tib %>%
     dplyr::select(-probe) %>%
     as.data.frame()
   
-  # Coerce expression columns to numeric safely
-  expr_mat[] <- lapply(expr_mat, function(x) as.numeric(as.character(x)))
+  expr_df[] <- lapply(expr_df, function(x) as.numeric(as.character(x)))
   
-  keep <- rowMeans(expr_mat > threshold, na.rm = TRUE) >= 0.15
+  keep <- rowMeans(expr_df > threshold, na.rm = TRUE) >= 0.15
   
   result_tib %>%
     dplyr::filter(keep) %>%
@@ -159,36 +151,28 @@ affy_to_hgnc <- function(affy_vector) {
 #' `1 202860_at   DENND4B good        7.16      ...`
 #' `2 204340_at   TMEM187 good        6.40      ...`
 reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
-  library(dplyr)
-  library(tibble)
-  
-  # 1) Match probe IDs in expression data to probe IDs in the mapping table
   idx <- match(expr_tibble$probe, names_ids$affy_hg_u133_plus_2)
-  
-  # HGNC symbols aligned to expr_tibble rows (NAs if not found)
   hgnc <- names_ids$hgnc_symbol[idx]
   
-  # 2) Add HGNC symbol column in the appropriate position (after probe)
-  expr_tibble <- expr_tibble %>%
-    tibble::add_column(hgnc_symbol = hgnc, .after = "probe")
+  out <- tibble::add_column(expr_tibble, hgnc_symbol = hgnc, .after = "probe")
   
-  # 3) Identify good/bad genes (using which() + %in%)
-  good_idx <- which(expr_tibble$hgnc_symbol %in% good_genes)
-  bad_idx  <- which(expr_tibble$hgnc_symbol %in% bad_genes)
+  good_idx <- which(out$hgnc_symbol %in% good_genes)
+  bad_idx  <- which(out$hgnc_symbol %in% bad_genes)
+  keep_idx <- sort(unique(c(good_idx, bad_idx)))
   
-  # Create category column (good/bad). If a gene is in both, label as "good"
-  category <- rep(NA_character_, nrow(expr_tibble))
-  category[bad_idx]  <- "bad"
-  category[good_idx] <- "good"
+  gene_category <- rep(NA_character_, nrow(out))
+  gene_category[bad_idx]  <- "bad"
+  gene_category[good_idx] <- "good"
   
-  expr_tibble <- expr_tibble %>%
-    tibble::add_column(gene_category = category, .after = "hgnc_symbol")
+  out <- tibble::add_column(out, gene_category = gene_category, .after = "hgnc_symbol")
   
-  # 4) Keep only genes of interest (good or bad)
-  keep_rows <- c(good_idx, bad_idx)
+  out <- out[keep_idx, , drop = FALSE]
   
-  expr_tibble %>%
-    dplyr::slice(keep_rows)
+  # Ensure column order exactly (probe, hgnc_symbol, gene_category, then samples)
+  sample_cols <- setdiff(colnames(out), c("probe", "hgnc_symbol", "gene_category"))
+  out <- out[, c("probe", "hgnc_symbol", "gene_category", sample_cols)]
+  
+  tibble::as_tibble(out)
 }
 
 
@@ -205,14 +189,13 @@ reduce_data <- function(expr_tibble, names_ids, good_genes, bad_genes){
 #'
 #' @examples
 convert_to_long <- function(tibble) {
-  library(dplyr)
-  library(tidyr)
-  
   tibble %>%
     tidyr::pivot_longer(
-      cols = -c(probe, hgnc_symbol, gene_category),
+      cols = -dplyr::any_of(c("probe", "hgnc_symbol", "gene_category")),
       names_to = "sample"
-      
+      # values_to defaults to "values"
     )
+      
+    
 }
 
