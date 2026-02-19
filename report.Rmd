@@ -168,11 +168,17 @@ When implementing, remember:
 deals with data.frames. Utilize `dplyr::pull()` to transform a tibble to a
 character vector, and `dplyr::as_tibble()` for converting a data frame back to a
 tibble.
+
+
+
 ```{r affy_to_hgnc}
 # Converting a sample affy ID to HGNC
-filter_15(result_tib) %>% affy_to_hgnc() -> gene_names
+filter_15(result_tib) %>% 
+  pull(probe) %>%
+  affy_to_hgnc() -> gene_names
 gene_names
 ```
+
 ## Refining Data with reduce_data()
 Our data preparation's ultimate goal is to streamline the dataset, focusing on relevant genes to make visualization more efficient with ggplot from the tidyverse package. The reduce_data() function serves this purpose by integrating various inputs, such as:
 
@@ -232,6 +238,13 @@ do *not* need to do this in a function, use the space provided below to create
 this plot. 
 ```{r boxplot from long format data using ggplot2, echo=FALSE}
 library(ggplot2)
-
+ggplot(long_format_data, aes(x = gene_category, y = value)) +
+  geom_boxplot() +
+  labs(
+    x = "Gene Category",
+    y = "Expression Values",
+    title = "Gene Expression Distribution"
+  ) +
+  theme_minimal()
 
 ```
