@@ -63,14 +63,20 @@ load_expression <- function(filepath) {
 #' `tibble [40,158 × 1] (S3: tbl_df/tbl/data.frame)`
 #' `$ probe: chr [1:40158] "1007_s_at" "1053_at" "117_at" "121_at" ...`
 filter_15 <- function(tibble){
-  library(dplyr)
   
   threshold <- log2(15)
   
+  expr_mat <- result_tib %>%
+    dplyr::select(-probe) %>%
+    as.data.frame()
+  
+  # Coerce expression columns to numeric safely
+  expr_mat[] <- lapply(expr_mat, function(x) as.numeric(as.character(x)))
+  
+  keep <- rowMeans(expr_mat > threshold, na.rm = TRUE) >= 0.15
+  
   result_tib %>%
-    dplyr::filter(
-      rowMeans(dplyr::across(-probe, ~ .x > threshold), na.rm = TRUE) >= 0.15
-    ) %>%
+    dplyr::filter(keep) %>%
     dplyr::select(probe)
 }
 
